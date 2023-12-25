@@ -5,12 +5,6 @@ class Rectangle {
         this.maxX = maxX;
         this.maxY = maxY;
     }
-    equal(rectangle){
-        return this.minX==rectangle.minX&&
-        this.minY==rectangle.minY&&
-        this.maxX==rectangle.maxX&&
-        this.maxY==rectangle.maxY;
-    }
 
     overlaps(other) {
         return this.minX <= other.maxX && this.maxX >= other.minX &&
@@ -38,7 +32,6 @@ class RTreeNode {
         this.rectangle = new Rectangle(Infinity, Infinity, -Infinity, -Infinity);
     }
 
-
     insert(rectangle) {
         this.entries.push(rectangle);
         this.rectangle.expand(rectangle);
@@ -46,9 +39,6 @@ class RTreeNode {
             return this.split();
         }
         return null;
-    }
-    equal(){
-        return false;
     }
 
     split() {
@@ -83,66 +73,18 @@ class RTreeNode {
                 entry.search(rectangle, found);
             }
         });
-        found.map(rec=>visualizeRest(rec))
+        found.map(rec=>visualizeRectangle(rec))
         return found;
     }
 
-    //delete a rectangle inside a node
-    //first check each entry if it is equal to the rectangle to delete 
-    //or the if the entry contains the rectangle if it's a node instead of a rectangle
     delete(rectangle) {
         for (let i = 0; i < this.entries.length; i++) {
-            const entry = this.entries[i];
-            if (entry.equal(rectangle) || (entry instanceof RTreeNode && entry.rectangle.contains(rectangle))) {
-
-                if (entry instanceof RTreeNode) {
-                    // Recursively delete and check for underflow
-                    if (entry.delete(rectangle)) {
-                        //the entry find a rectangle inside it 
-                        if (entry.entries.length < entry.minEntries) {
-                            //i is which entry inside this node to handle underflow
-                            return this.handleUnderflow(i);
-                        }
-                    }
-                } else {
-                    this.entries.splice(i, 1);
-                    return this.entries.length < this.minEntries;
-                }
+            if (this.entries[i] === rectangle || (this.entries[i] instanceof RTreeNode && this.entries[i].rectangle.contains(rectangle))) {
+                this.entries.splice(i, 1);
+                return true;
             }
         }
         return false;
-    }
-    handleUnderflow(index) {
-        // For simplicity, we'll merge with a sibling (previous or next)
-        const node = this.entries[index];
-        //get the node that is underflow
-        let siblingIndex = index > 0 ? index - 1 : index + 1;
-        let sibling = this.entries[siblingIndex];
-        //get sibling to merge
-
-        if (sibling.entries.length + node.entries.length <= this.maxEntries) {
-            //just make all entries into the sibling
-            // Merge node with sibling
-            sibling.entries.push(...node.entries);
-            //expand sibling's rectangle according to every entry it has
-            sibling.entries.forEach(entry => sibling.rectangle.expand(entry.rectangle));
-            this.entries.splice(index, 1); // Remove the underflowed node
-        } else {
-            // Redistribute entries between node and sibling
-            // This is a basic implementation; more advanced strategies could be employed
-            while (node.entries.length < this.minEntries) {
-                const entry = sibling.entries.pop();
-                node.entries.unshift(entry);
-                node.rectangle.expand(entry.rectangle);
-                //take the entry from sibling to this node util it meets requirements
-            }
-            //because some entries has been taken out from sibling
-            //should calculate the rectangle again 
-            sibling.rectangle = new Rectangle(Infinity, Infinity, -Infinity, -Infinity);
-            sibling.entries.forEach(entry => sibling.rectangle.expand(entry.rectangle));
-        }
-
-        return this.entries.length < this.minEntries;
     }
 }
 
@@ -161,16 +103,18 @@ class RTree {
             newRoot.rectangle.expand(splitNodes[1].rectangle);
             this.root = newRoot;
         }
+        visualizeRTree(this);
     }
 
     search(minX, minY, maxX, maxY) {
         const rectangle = new Rectangle(minX, minY, maxX, maxY);
-        visualizeRectangle(rectangle,"blue")
+        visualizeRTree(this);
         return this.root.search(rectangle);
     }
 
     delete(minX, minY, maxX, maxY) {
         const rectangle = new Rectangle(minX, minY, maxX, maxY);
+        visualizeRTree(this);
         return this.root.delete(rectangle);
     }
 
@@ -178,21 +122,14 @@ class RTree {
 
 // Example usage
 const rtree = new RTree(4, 2); // Max entries 4, Min entries 2
-rtree.insert(100, 100, 200, 200);
-rtree.insert(150, 150, 300, 300);
-rtree.insert(10, 10, 80, 80);
-rtree.insert(240, 240, 300, 300);
-rtree.insert(220, 220, 280, 280);
+rtree.insert(10, 10, 20, 20);
+rtree.insert(15, 15, 30, 30);
 
-//display the query as red
-
-//rtree.delete(100, 100, 200, 200);
-//console.log('Tree after Deletion:', rtree.root);
-visualizeRTree(rtree);
-const query=new Rectangle(160,160,300,300);
-const results = rtree.search(160,160,300,300);
-visualizeRectangle(query,"purple");
+const results = rtree.search(5, 5, 25, 25);
 console.log('Search Results:', results);
+
+//rtree.delete(10, 10, 20, 20);
+console.log('Tree after Deletion:', rtree.root);
 function drawRectangle(ctx, rectangle, color = 'black') {
     ctx.beginPath();
     ctx.rect(rectangle.minX, rectangle.minY, rectangle.maxX - rectangle.minX, rectangle.maxY - rectangle.minY);
@@ -203,7 +140,6 @@ function drawRectangle(ctx, rectangle, color = 'black') {
 function drawTree(ctx, node, level = 0) {
     const colors = ['red', 'green', 'blue', 'purple', 'orange'];
     const color = colors[level % colors.length];
-    //draw different level's rectangle as using different color
 
     node.entries.forEach(entry => {
         if (entry instanceof RTreeNode) {
@@ -212,7 +148,7 @@ function drawTree(ctx, node, level = 0) {
             drawRectangle(ctx, entry, color);
         }
     });
-    //all the bounding box is drew as black
+
     drawRectangle(ctx, node.rectangle, 'black'); // Draw the bounding box for the node
 }
 
@@ -223,19 +159,13 @@ function visualizeRTree(rTree) {
 
     drawTree(ctx, rTree.root);
 }
-function visualizeRectangle(rect,color="green"){
+function visualizeRectangle(rect){
     const canvas = document.getElementById('rTreeCanvas');
     const ctx = canvas.getContext('2d');
-    drawRectangle(ctx, rect, color); // Draw the bounding box for the node
+    drawRectangle(ctx, rect, 'blue'); // Draw the bounding box for the node
     
 }
 
-function visualizeRest(rect){
-    const canvas = document.getElementById('rTreeCanvas');
-    const ctx = canvas.getContext('2d');
-    drawRectangle(ctx, rect, 'yellow'); // Draw the bounding box for the node
-    
-}
 
 
 
